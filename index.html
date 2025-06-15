@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predicciones</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div id="welcome-screen">
+        <div class="welcome-content">
+            <h1>Bienvenido</h1>
+            <p>sube el volumen de tu dispositivo para vivir la experiencia al 100</p>
+            <button id="enter-app-btn" class="btn btn-primary">Entrar</button>
+        </div>
+    </div>
+
+    <header>
+        <div class="header-content">
+            <h1>Predicciones Mundial de Clubes </h1>
+        </div>
+    </header>
+
+    <audio id="background-music" loop>
+        <source src="music.mp3" type="audio/mpeg">
+        Tu navegador no soporta el elemento de audio.
+    </audio>
+
+    <div class="container">
+        <section id="participant-section" class="card">
+            <h2>Participante</h2>
+            <div class="input-group">
+                <select id="participant-select">
+                    <option value="">Selecciona un participante</option>
+                </select>
+                <input type="text" id="new-participant-name" placeholder="Nombre del nuevo participante">
+                <button id="add-participant-btn" class="btn btn-add">Añadir Participante</button>
+            </div>
+        </section>
+
+        <section id="partidos-section" class="card">
+            <h2>Partidos</h2>
+            <button id="add-match-btn" class="btn btn-primary">Añadir Nuevo Partido</button>
+            <table id="partidos-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Hora</th>
+                        <th>Equipo Local</th>
+                        <th>Equipo Visitante</th>
+                        <th>Marcador Final</th>
+                        <th class="prediction-header">Tu Predicción</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    </tbody>
+            </table>
+        </section>
+
+        <section id="all-predictions-section" class="card">
+            <h2>Predicciones por Partido</h2>
+            <select id="match-selector-for-predictions">
+                <option value="">Selecciona un partido</option>
+                </select>
+            <div id="predictions-for-selected-match">
+                <p class="placeholder-text">Selecciona un partido para ver las predicciones de todos los participantes.</p>
+            </div>
+        </section>
+
+        <section id="puntuacion-section" class="card">
+            <h2>Puntuación</h2>
+            <div id="puntuacion-display">
+                </div>
+        </section>
+    </div>
+
+    <div id="match-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2>Añadir/Editar Partido</h2>
+            <form id="match-form">
+                <label for="match-date">Fecha:</label>
+                <input type="date" id="match-date" required>
+
+                <label for="match-time">Hora:</label>
+                <input type="time" id="match-time" required>
+
+                <label for="home-team">Equipo Local:</label>
+                <input type="text" id="home-team" placeholder="Ej: Real Madrid" required>
+
+                <label for="away-team">Equipo Visitante:</label>
+                <input type="text" id="away-team" placeholder="Ej: Al-Hilal" required>
+
+                <button type="submit" class="btn btn-primary">Guardar Partido</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="password-modal" class="modal">
+        <div class="modal-content">
+            <h2>Ingrese Contraseña</h2>
+            <p>Se requiere una contraseña para realizar esta acción.</p>
+            <input type="password" id="password-input" placeholder="Contraseña">
+            <button id="password-submit-btn" class="btn btn-primary">Confirmar</button>
+            <button id="password-cancel-btn" class="btn btn-secondary">Cancelar</button>
+        </div>
+    </div>
+
+    <footer>
+        <p>Desarrollado por: JR24</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
