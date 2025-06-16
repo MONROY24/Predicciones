@@ -1,6 +1,7 @@
 const ADMIN_PASSWORD = "2022";
-const PARTICIPANT_STORAGE_KEY = 'mundialClubesParticipants';
-const PARTIDOS_STORAGE_KEY = 'mundialClubesPartidos';
+// YA NO SE USAN LAS CLAVES DE LOCALSTORAGE
+// const PARTICIPANT_STORAGE_KEY = 'mundialClubesParticipants';
+// const PARTIDOS_STORAGE_KEY = 'mundialClubesPartidos';
 
 document.addEventListener('DOMContentLoaded', () => {
     const welcomeScreen = document.getElementById('welcome-screen');
@@ -30,14 +31,19 @@ document.addEventListener('DOMContentLoaded', () => {
     let editingMatchId = null;
     let currentPasswordCallback = null;
 
-    // --- Utility and Data Persistence Functions (using localStorage) ---
+    // --- CORRECCIÓN: Funciones de persistencia con Vercel KV ---
 
     async function fetchData() {
         try {
-            participants = JSON.parse(localStorage.getItem(PARTICIPANT_STORAGE_KEY)) || [];
-            partidos = JSON.parse(localStorage.getItem(PARTIDOS_STORAGE_KEY)) || [];
+            const response = await fetch('/api/get-data');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            participants = data.participants || [];
+            partidos = data.partidos || [];
         } catch (error) {
-            console.error('Error fetching data from localStorage:', error);
+            console.error('Error fetching data from server:', error);
             participants = [];
             partidos = [];
         }
@@ -45,12 +51,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function saveData() {
         try {
-            localStorage.setItem(PARTICIPANT_STORAGE_KEY, JSON.stringify(participants));
-            localStorage.setItem(PARTIDOS_STORAGE_KEY, JSON.stringify(partidos));
+            await fetch('/api/save-data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ participants, partidos }),
+            });
         } catch (error) {
-            console.error('Error saving data to localStorage:', error);
+            console.error('Error saving data to server:', error);
+            alert('Hubo un error al guardar los cambios. Intenta de nuevo.');
         }
     }
+
 
     // --- Participant Management ---
 
@@ -82,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         participants.push(newParticipant);
         renderParticipantsSelect();
-        saveData();
+        saveData(); // Llama a la nueva función saveData
         newParticipantNameInput.value = '';
         alert(`Participante "${name}" añadido.`);
     }
@@ -91,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentPasswordCallback = () => {
             addParticipant(newParticipantNameInput.value);
             closePasswordModal();
-            renderPartidos();
+            renderPartidos(); // renderPartidos ya llama a saveData
             renderPuntuacion();
             renderMatchSelectorForPredictions();
         };
@@ -109,6 +122,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderPartidos() {
         partidosTableBody.innerHTML = '';
+        partidos.sort((a, b) => new Date(a.date) - new Date(b.date) || a.time.localeCompare(b.time)); // Ordenar partidos
+        
         partidos.forEach(match => {
             const row = partidosTableBody.insertRow();
             row.dataset.id = match.id;
@@ -155,17 +170,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-        renderPuntuacion();
+        renderPuntuacion(); // Puntuación se actualiza después de renderizar partidos
         renderMatchSelectorForPredictions();
-        saveData();
+        saveData(); // Guardar cualquier cambio en el estado de los partidos (como predicciones)
     }
 
     partidosTableBody.addEventListener('click', (e) => {
         const id = e.target.dataset.id;
-        const match = partidos.find(m => m.id === id);
         const action = e.target.dataset.action;
+        const match = partidos.find(m => m.id === id);
+        
+        if (!action) return;
+        if (!match && (action !== 'save-prediction' && action !== 'set-score')) return;
 
-        if (!match) return;
 
         if (action === 'save-prediction' || action === 'edit-prediction') {
             if (!currentParticipant) {
@@ -299,7 +316,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const scores = {};
 
         participants.forEach(p => {
-            scores[p.id] = 0;
+            scores[p.id] = { name: p.name, score: 0 };
         });
 
         partidos.forEach(match => {
@@ -310,23 +327,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (numCorrect > 0) {
                     const pointsPerPerson = 1 / numCorrect;
                     correctPredictionsForThisMatch.forEach(p => {
-                        scores[p.participantId] += pointsPerPerson;
+                        if(scores[p.participantId]) {
+                            scores[p.participantId].score += pointsPerPerson;
+                        }
                     });
                 }
             }
         });
+        
+        const sortedScores = Object.values(scores).sort((a, b) => b.score - a.score);
 
-        participants.sort((a, b) => (scores[b.id] || 0) - (scores[a.id] || 0));
-
-        participants.forEach(p => {
+        sortedScores.forEach(p => {
             const participantScoreDiv = document.createElement('div');
             participantScoreDiv.innerHTML = `
-                <strong>${p.name}:</strong> <span>${(scores[p.id] || 0).toFixed(2)} puntos</span>
+                <strong>${p.name}:</strong> <span>${(p.score || 0).toFixed(2)} puntos</span>
             `;
             puntuacionDisplay.appendChild(participantScoreDiv);
         });
 
-        saveData();
+        // La puntuación no modifica los datos, por lo que no necesita un saveData() aquí
     }
 
     // --- Password Modal Logic ---
@@ -367,14 +386,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- All Predictions per Match Section ---
 
     function renderMatchSelectorForPredictions() {
+        const currentSelectedMatchId = matchSelectorForPredictions.value;
         matchSelectorForPredictions.innerHTML = '<option value="">Selecciona un partido</option>';
+        
         partidos.forEach(match => {
             const option = document.createElement('option');
             option.value = match.id;
             option.textContent = `${match.homeTeam} vs ${match.awayTeam} (${match.date})`;
             matchSelectorForPredictions.appendChild(option);
         });
-        const currentSelectedMatchId = predictionsForSelectedMatchDiv.dataset.currentMatchId;
+
         if (currentSelectedMatchId && partidos.some(m => m.id === currentSelectedMatchId)) {
             matchSelectorForPredictions.value = currentSelectedMatchId;
             renderPredictionsForSelectedMatch(currentSelectedMatchId);
@@ -416,10 +437,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         predictionsForSelectedMatchDiv.appendChild(matchSummary);
 
-        if (selectedMatch.predictions.length === 0 && participants.length === 0) {
+        if (participants.length === 0) {
             const noPredictionsText = document.createElement('p');
             noPredictionsText.classList.add('placeholder-text');
-            noPredictionsText.textContent = 'Aún no hay participantes o predicciones para este partido.';
+            noPredictionsText.textContent = 'Aún no hay participantes registrados.';
             predictionsForSelectedMatchDiv.appendChild(noPredictionsText);
             return;
         }
@@ -450,23 +471,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Music Playback and Welcome Screen Logic ---
 
-    // Function to start music
     function startMusic() {
         backgroundMusic.volume = 0.3;
-        backgroundMusic.play().then(() => {
-            console.log("Música iniciada por interacción del usuario.");
-        }).catch(error => {
+        backgroundMusic.play().catch(error => {
             console.warn("Autoplay de audio bloqueado por el navegador:", error);
-            alert("No se pudo reproducir la música automáticamente. Tu navegador puede requerir una interacción adicional.");
+            // No mostramos alerta para no ser intrusivos. La música simplemente no sonará si está bloqueada.
         });
     }
-
-    // Event listener for the "Enter" button on the welcome screen
+    
+    // --- CORRECCIÓN MÚSICA ---
     enterAppBtn.addEventListener('click', () => {
-        welcomeScreen.classList.add('hidden'); // Add class to hide with animation
+        // 1. Inicia la música inmediatamente con el clic del usuario.
+        startMusic();
+    
+        // 2. Ejecuta la animación para ocultar la pantalla.
+        welcomeScreen.classList.add('hidden');
         setTimeout(() => {
             welcomeScreen.style.display = 'none'; // Completely hide after animation
-            startMusic(); // Start music after screen fades out
         }, 800); // Match this with your fadeOutWelcome animation duration
     });
 
@@ -477,12 +498,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await fetchData();
         renderParticipantsSelect();
         renderPartidos();
-        renderPuntuacion();
-        renderMatchSelectorForPredictions();
-
-        // Initially hide the main content until the welcome screen is dismissed
-        // This is implicitly handled by the welcome screen being fixed on top.
-        // If you had main content hidden by default, you'd unhide it here.
+        // renderPuntuacion() y renderMatchSelectorForPredictions() son llamadas desde renderPartidos()
     }
 
     initialize();
