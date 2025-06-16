@@ -1,32 +1,53 @@
-import { kv } from '@vercel/kv';
-
-// Es recomendable usar 'edge' runtime para funciones de KV por su rapidez.
 export const config = {
   runtime: 'edge',
 };
 
 export default async function handler(request) {
-  // Solo permitir peticiones POST
   if (request.method !== 'POST') {
     return new Response(JSON.stringify({ message: 'Only POST method is allowed' }), { status: 405 });
   }
 
+  // Obtenemos las variables de entorno de forma segura.
+  const edgeConfigId = process.env.EDGE_CONFIG.split('_')[1];
+  const apiToken = process.env.VERCEL_API_TOKEN;
+
+  if (!apiToken || !edgeConfigId) {
+    return new Response(JSON.stringify({ error: 'Missing Vercel API Token or Edge Config ID' }), { status: 500 });
+  }
+
   try {
-    // Lee los datos que el front-end envía en el cuerpo de la petición
     const { participants, partidos } = await request.json();
 
-    // Valida que los datos existan antes de intentar guardarlos
-    if (!participants || !partidos) {
-        return new Response(JSON.stringify({ error: 'Missing participants or partidos data' }), { status: 400 });
-    }
+    const response = await fetch(`https://api.vercel.com/v1/edge-config/${edgeConfigId}/items`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${apiToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [
+          {
+            operation: 'update',
+            key: 'participants',
+            value: participants,
+          },
+          {
+            operation: 'update',
+            key: 'partidos',
+            value: partidos,
+          },
+        ],
+      }),
+    });
 
-    // Guarda ambos arrays en Vercel KV. 'set' sobrescribe los datos existentes.
-    await kv.set('participants', participants);
-    await kv.set('partidos', partidos);
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error.message);
+    }
 
     return new Response(JSON.stringify({ message: 'Data saved successfully!' }), { status: 200 });
   } catch (error) {
-    console.error(error);
-    return new Response(JSON.stringify({ error: 'Failed to save data' }), { status: 500 });
+    console.error('Error saving to Edge Config:', error);
+    return new Response(JSON.stringify({ error: `Failed to save data: ${error.message}` }), { status: 500 });
   }
 }
